@@ -1,0 +1,54 @@
+/** This node is a service server that can be used to post process the estimated pose from a 6D pose estimation algorithm.
+ Service:
+        request -> esitmated_pose_topic (String)
+                -> optimize_pose (bool)            
+        respone -> refined pose (geometry_msgs/pose_stamped)
+*/
+#include "rclcpp/rclcpp.hpp"
+#include "lv_grasp_interfaces/srv/pose_post_proc_service.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+
+class PosePostProcServer : public rclcpp::Node
+{
+public:
+  PosePostProcServer() : Node("pose_post_proc_server")
+  {
+    // Create the service server
+    server_ = this->create_service<lv_grasp_interfaces::srv::PosePostProcService>(
+        "pose_post_proc_service",
+        std::bind(&PosePostProcServer::handle_service_request, this, std::placeholders::_1, std::placeholders::_2));
+  }
+
+private:
+  rclcpp::Service<lv_grasp_interfaces::srv::PosePostProcService>::SharedPtr server_;
+
+  void handle_service_request(
+      const std::shared_ptr<lv_grasp_interfaces::srv::PosePostProcService::Request> request,
+      std::shared_ptr<lv_grasp_interfaces::srv::PosePostProcService::Response> response)
+  {
+    // Check the boolean value in the request
+    if (request->activate)
+    {
+      // If activate is true, perform processing and populate the response
+      response->refined_pose = geometry_msgs::msg::PoseStamped();
+      // Populate other fields in the response as needed
+      response->scaled_cuboid_dimensions[0] = 1.0;
+      response->scaled_cuboid_dimensions[1] = 2.0;
+      response->scaled_cuboid_dimensions[2] = 3.0;
+      response->scale_obj = 0.5;
+      //response->success = true;
+    }
+    else
+    {
+      
+    }
+  }
+};
+
+int main(int argc, char *argv[])
+{
+  rclcpp::init(argc, argv);
+  rclcpp::spin(std::make_shared<PosePostProcServer>());
+  rclcpp::shutdown();
+  return 0;
+}
