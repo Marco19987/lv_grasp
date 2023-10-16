@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(lv_grasp_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 add_executable(pose_post_proc_server src/pose_post_proc_server.cpp)
 ament_target_dependencies(pose_post_proc_server rclcpp lv_grasp_interfaces)
