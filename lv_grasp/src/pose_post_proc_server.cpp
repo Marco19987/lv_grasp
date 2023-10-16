@@ -22,7 +22,7 @@ The parameter frame_to_transform is used to transform the pose in the specified 
 #include "tf2_ros/transform_listener.h"
 
 #include "cv_bridge/cv_bridge.h"
-#include "opencv4/opencv2/opencv.hpp"
+#include <opencv2/opencv.hpp>
 
 #define WIDTH 640
 #define HEIGHT 480
