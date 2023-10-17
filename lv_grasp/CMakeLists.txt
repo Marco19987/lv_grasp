@@ -14,10 +14,11 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(depth_optimization_interfaces REQUIRED)
 
 
 add_executable(pose_post_proc_server src/pose_post_proc_server.cpp)
-ament_target_dependencies(pose_post_proc_server rclcpp lv_grasp_interfaces geometry_msgs sensor_msgs std_msgs tf2_ros cv_bridge)
+ament_target_dependencies(pose_post_proc_server rclcpp lv_grasp_interfaces geometry_msgs sensor_msgs std_msgs tf2_ros cv_bridge depth_optimization_interfaces)
 
 install(TARGETS
   pose_post_proc_server 

@@ -16,13 +16,13 @@ The parameter frame_to_transform is used to transform the pose in the specified 
 
 #include "rclcpp/rclcpp.hpp"
 #include "lv_grasp_interfaces/srv/pose_post_proc_service.hpp"
+#include "depth_optimization_interfaces/srv/depth_optimize.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/image.hpp"
-#include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
-
+#include "lv_utilities/utilities.h"
 #include "cv_bridge/cv_bridge.h"
 #include <opencv2/opencv.hpp>
+#include <eigen3/Eigen/Geometry>
 
 #define WIDTH 640
 #define HEIGHT 480
@@ -38,7 +38,6 @@ public:
     sample_pose_ = 0;
     sample_depth_ = 0;
     object_name_ = "";
-    grasp_pose_msg_ = geometry_msgs::msg::PoseStamped();
     read_depth_ = false;
     read_pose_ = false;
     success_srv_ = true;
@@ -71,7 +70,6 @@ private:
   std::string object_name_;
   geometry_msgs::msg::PoseStamped estimated_pose_msgs_[SAMPLE_AVERAGE];
   sensor_msgs::msg::Image depth_msgs_[SAMPLE_AVERAGE];
-  geometry_msgs::msg::PoseStamped grasp_pose_msg_;
 
   void pose_obj_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
   {
@@ -124,18 +122,215 @@ private:
     current_depth = cv::Mat::zeros(cv::Size(WIDTH, HEIGHT), CV_16UC1);
     current_depth = cv_bridge::toCvCopy(msg, msg.encoding)->image;
   }
+  void average_pose(geometry_msgs::msg::PoseStamped &estimated_pose_msg)
+  {
+    // std::cout << estimated_pose_msg.pose.position.x << ", " << estimated_pose_msg.pose.position.y << ", " << estimated_pose_msg.pose.position.z << std::endl;
+
+    for (int i = 0; i < SAMPLE_AVERAGE; i++)
+    {
+      estimated_pose_msg.pose.position.x = estimated_pose_msg.pose.position.x + estimated_pose_msgs_[i].pose.position.x;
+      estimated_pose_msg.pose.position.y = estimated_pose_msg.pose.position.y + estimated_pose_msgs_[i].pose.position.y;
+      estimated_pose_msg.pose.position.z = estimated_pose_msg.pose.position.z + estimated_pose_msgs_[i].pose.position.z;
+
+      estimated_pose_msg.pose.orientation.w = estimated_pose_msg.pose.orientation.w + estimated_pose_msgs_[i].pose.orientation.w;
+      estimated_pose_msg.pose.orientation.x = estimated_pose_msg.pose.orientation.x + estimated_pose_msgs_[i].pose.orientation.x;
+      estimated_pose_msg.pose.orientation.y = estimated_pose_msg.pose.orientation.y + estimated_pose_msgs_[i].pose.orientation.y;
+      estimated_pose_msg.pose.orientation.z = estimated_pose_msg.pose.orientation.z + estimated_pose_msgs_[i].pose.orientation.z;
+    }
+    estimated_pose_msg.pose.position.x = estimated_pose_msg.pose.position.x / SAMPLE_AVERAGE;
+    estimated_pose_msg.pose.position.y = estimated_pose_msg.pose.position.y / SAMPLE_AVERAGE;
+    estimated_pose_msg.pose.position.z = estimated_pose_msg.pose.position.z / SAMPLE_AVERAGE;
+
+    estimated_pose_msg.pose.orientation.w = estimated_pose_msg.pose.orientation.w / SAMPLE_AVERAGE;
+    estimated_pose_msg.pose.orientation.x = estimated_pose_msg.pose.orientation.x / SAMPLE_AVERAGE;
+    estimated_pose_msg.pose.orientation.y = estimated_pose_msg.pose.orientation.y / SAMPLE_AVERAGE;
+    estimated_pose_msg.pose.orientation.z = estimated_pose_msg.pose.orientation.z / SAMPLE_AVERAGE;
+  }
+  void average_depth(float depth_matrix[HEIGHT * WIDTH], cv::Mat depth_cv[SAMPLE_AVERAGE])
+  {
+    for (int i = 0; i < SAMPLE_AVERAGE; i++)
+    {
+      get_real_depth(depth_msgs_[i], depth_cv[i]);
+    }
+
+    for (int i = 0; i < HEIGHT; i++)
+    {
+      for (int j = 0; j < WIDTH; j++)
+      {
+        for (int k = 0; k < SAMPLE_AVERAGE; k++)
+        {
+          depth_matrix[i * WIDTH + j] = depth_matrix[i * WIDTH + j] + depth_cv[k].at<uint16_t>(i, j) * DEPTH_SCALE;
+        }
+        depth_matrix[i * WIDTH + j] = depth_matrix[i * WIDTH + j] / SAMPLE_AVERAGE;
+      }
+    }
+  }
+
+  auto calculate_pose(const geometry_msgs::msg::PoseStamped &obj_pose, const std::string &frame_to_transform)
+  {
+    /* Reading transform camera_T_new (camera_frame - up, new_frame - down) */
+    bool getTransform_ = false;
+    geometry_msgs::msg::TransformStamped transform_CB;
+    while (!getTransform_)
+      getTransform_ = lv::getTransform(tf_listner_node, obj_pose.header.frame_id, frame_to_transform, transform_CB);
+
+    if (getTransform_)
+      lv::print_geometry_transform(transform_CB.transform);
+
+    Eigen::Isometry3d T_CB = lv::geometry_2_eigen(transform_CB.transform);
+
+    /* Transform camera_T_object (camera_frame - up, object_frame - down) */
+    Eigen::Vector3d translation_OC(obj_pose.pose.position.x, obj_pose.pose.position.y, obj_pose.pose.position.z);
+    Eigen::Quaterniond orientation_OC(obj_pose.pose.orientation.w, obj_pose.pose.orientation.x, obj_pose.pose.orientation.y, obj_pose.pose.orientation.z);
+    Eigen::Isometry3d T_OC(orientation_OC);
+    T_OC.translation() = translation_OC;
+    Eigen::Isometry3d T_OC = lv::geometry_2_eigen(obj_pose.pose);
+
+    /* Calculate frame object-base*/
+    Eigen::Isometry3d T_OB;
+    T_OB = T_CB * T_OC;
+
+    /* return the transformed pose */
+    geometry_msgs::msg::PoseStamped transformed_pose;
+    Eigen::Quaterniond orientation_transformed_pose(T_OB.rotation());
+
+    transformed_pose.header.stamp = ros::Time::now();
+    transformed_pose.header.frame_id = frame_to_transform;
+    transformed_pose.pose.position.x = T_OB.translation().x();
+    transformed_pose.pose.position.y = T_OB.translation().y();
+    transformed_pose.pose.position.z = T_OB.translation().z();
+
+    transformed_pose.pose.orientation.w = orientation_transformed_pose.w();
+    transformed_pose.pose.orientation.x = orientation_transformed_pose.x();
+    transformed_pose.pose.orientation.y = orientation_transformed_pose.y();
+    transformed_pose.pose.orientation.z = orientation_transformed_pose.z();
+
+    return transformed_pose;
+  }
 
   void handle_service_request(
       const std::shared_ptr<lv_grasp_interfaces::srv::PosePostProcService::Request> request,
       std::shared_ptr<lv_grasp_interfaces::srv::PosePostProcService::Response> response)
   {
+    // initialization
+    RCLCPP_INFO(this->get_logger(), "Callback get_grasp_pose_service\n");
+
     // Verify object type, if changed change the pose topic and recompute the mean
+    if (object_name_ != request->object_name.data)
+    {
+      object_name_ = request->object_name.data;
+      subscribe_to_pose_topic("/pose_" + object_name_);
+      read_pose_ = false;
+      sample_pose_ = 0;
+      RCLCPP_INFO(this->get_logger(), "Different object type received\n");
+      RCLCPP_INFO(this->get_logger(), "Subscription to the topic: /pose_ + %s \n", object_name_.c_str());
+    }
+    // if requested, compute the mean of the poses and depth maps
+    geometry_msgs::msg::PoseStamped estimated_pose;
+    float depth_matrix[HEIGHT * WIDTH];
 
-    // Compute mean
+    if (request->compute_mean == true)
+    {
+      RCLCPP_INFO(this->get_logger(), "Computing the mean of the poses and depth maps...\n");
+      rclcpp::Rate rate(10);
+      while (!read_depth_ || !read_pose_)
+      {
+        RCLCPP_INFO(this->get_logger(), "Waiting for pose and depth messages... (sample_depth=%d, sample_pose=%d)\n", sample_depth_, sample_pose_);
+        rate.sleep();
+      }
+      // compute poses average
+      average_pose(estimated_pose);
+      RCLCPP_INFO_STREAM(this->get_logger(), "Average pose:\n");
+      RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(estimated_pose));
 
+      // compute depth maps average
+      cv::Mat depth_cv[SAMPLE_AVERAGE];
+      for (int i = 0; i < HEIGHT * WIDTH; i++)
+      {
+        depth_matrix[i] = 0.0;
+      }
+      RCLCPP_INFO(this->get_logger(), "\nComputing the mean of the depth maps...\n");
+      average_depth(depth_matrix, depth_cv);
+    }
+    else
+    {
+      RCLCPP_INFO(this->get_logger(), "No mean was required\n");
+      RCLCPP_INFO(this->get_logger(), "Readed estimated pose:\n");
+      estimated_pose = estimated_pose_msgs_[sample_pose_];
+      RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(estimated_pose));
+
+      cv::Mat depth_cv;
+      get_real_depth(depth_msgs_[sample_depth_], depth_cv);
+      for (int i = 0; i < HEIGHT; i++)
+      {
+        for (int j = 0; j < WIDTH; j++)
+        {
+          depth_matrix[i * WIDTH + j] = depth_cv.at<uint16_t>(i, j) * DEPTH_SCALE;
+        }
+      }
+    }
     // Invoke the depth optimization service if required
+    depth_optimization_interfaces::srv::DepthOptimize::Response::SharedPtr result_depth_optimization;
+    if (request->optimize_pose == true)
+    {
+      RCLCPP_INFO(this->get_logger(), "Optimization required: invoking the depth optimization service...\n");
+      rclcpp::Client<depth_optimization_interfaces::srv::DepthOptimize>::SharedPtr client =
+          this->create_client<depth_optimization_interfaces::srv::DepthOptimize>("/depth_optimization_service");
+      while (!client->wait_for_service(std::chrono::seconds(1)))
+      {
+        if (!rclcpp::ok())
+        {
+          RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the service. Exiting.");
+          return;
+        }
+        RCLCPP_INFO(this->get_logger(), "service not available, waiting again...");
+      }
+      auto request_depth_optimization = std::make_shared<depth_optimization_interfaces::srv::DepthOptimize::Request>();
+      request_depth_optimization->estimated_pose = estimated_pose;
+      request_depth_optimization->depth_matrix.resize(WIDTH * HEIGHT);
+      for (int i = 0; i < WIDTH * HEIGHT; i++)
+        request_depth_optimization->depth_matrix[i] = depth_matrix[i];
 
+      auto result_depth_optimization_ = client->async_send_request(request_depth_optimization);
+      result_depth_optimization = result_depth_optimization_.get();
+      if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result_depth_optimization_) ==
+          rclcpp::FutureReturnCode::SUCCESS)
+      {
+        success_srv_ = result_depth_optimization.get()->success;
+        if (success_srv_)
+        {
+          RCLCPP_INFO(this->get_logger(), "Optimization success! \n");
+          RCLCPP_INFO(this->get_logger(), "Optimized pose:\n");
+          RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(result_depth_optimization.get()->refined_pose));
+          RCLCPP_INFO_STREAM(this->get_logger(), "scale_obj: " << result_depth_optimization.get()->scale_obj);
+          RCLCPP_INFO_STREAM(this->get_logger(), "cad dimension scaled: ");
+          for (int i = 0; i < 3; i++)
+          {
+            RCLCPP_INFO_STREAM(this->get_logger(), result_depth_optimization.get()->scaled_cuboid_dimension.at(i));
+          }
+        }
+      }
+      else
+      {
+        RCLCPP_ERROR(this->get_logger(), "Failed to call service depth_optimization_service");
+        success_srv_ = false;
+      }
+    }
     // Convert the pose to the required frame if required
+
+    // Return the optimized pose
+    if (success_srv_)
+    {
+      RCLCPP_ERROR(this->get_logger(), "The pose is correctly post processed");
+      response->refined_pose = result_depth_optimization.get()->refined_pose;
+      response->scale_obj = result_depth_optimization.get()->scale_obj;
+      response->scaled_cuboid_dimensions = result_depth_optimization.get()->scaled_cuboid_dimension;
+    }
+    else
+    {
+      RCLCPP_ERROR(this->get_logger(), "The pose has been correctly processed");
+      response->refined_pose = estimated_pose;
+    }
   }
 };
 
