@@ -3,6 +3,7 @@ bool optimize_pose
 bool compute_mean  
 std_msgs/String frame_to_transform
 ---
+geometry_msgs/PoseStamped estimated_pose
 geometry_msgs/PoseStamped refined_pose
 float64[3] scaled_cuboid_dimensions
 float64 scale_obj

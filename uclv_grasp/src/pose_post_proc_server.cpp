@@ -6,7 +6,10 @@
                 -> compute_mean (bool)
                 -> frame_to_transform (std_msgs/string)
         respone:
+                -> estimated pose (geometry_msgs/pose_stamped)
                 -> refined pose (geometry_msgs/pose_stamped)
+                -> scale_obj (float)
+                -> scaled_cuboid_dimensions (std_msgs/float32[3])
 
 The parameter object_name defines the topic from wich the node will read the 6d poses: "/pose_object_name"
 if optimize_pose is True, the service server read the depth map from the camera topic and calls the service for the pose refinement,
@@ -15,11 +18,11 @@ The parameter frame_to_transform is used to transform the pose in the specified 
 */
 
 #include "rclcpp/rclcpp.hpp"
-#include "lv_grasp_interfaces/srv/pose_post_proc_service.hpp"
+#include "uclv_grasp_interfaces/srv/pose_post_proc_service.hpp"
 #include "depth_optimization_interfaces/srv/depth_optimize.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/image.hpp"
-#include "lv_utilities/utilities.h"
+#include "uclv_utilities/utilities.hpp"
 #include "cv_bridge/cv_bridge.h"
 #include <opencv2/opencv.hpp>
 #include <eigen3/Eigen/Geometry>
@@ -37,27 +40,26 @@ public:
     // Initialize the additional attributes
     sample_pose_ = 0;
     sample_depth_ = 0;
-    object_name_ = "";
+    object_name_ = "santal_ace";
     read_depth_ = false;
     read_pose_ = false;
     success_srv_ = true;
-    optimizer_ = true;
 
     // Create the pose subscriber
-    subscribe_to_pose_topic("/pose_obj");
+    subscribe_to_pose_topic("/pose_" + object_name_);
 
     // Create the depth subscriber
     depth_subscriber_ = this->create_subscription<sensor_msgs::msg::Image>(
         "/camera/depth/image_raw", 1, std::bind(&PosePostProcServer::depth_callback, this, std::placeholders::_1));
 
     // Create the service server
-    server_ = this->create_service<lv_grasp_interfaces::srv::PosePostProcService>(
+    server_ = this->create_service<uclv_grasp_interfaces::srv::PosePostProcService>(
         "pose_post_proc_service",
         std::bind(&PosePostProcServer::handle_service_request, this, std::placeholders::_1, std::placeholders::_2));
   }
 
 private:
-  rclcpp::Service<lv_grasp_interfaces::srv::PosePostProcService>::SharedPtr server_;
+  rclcpp::Service<uclv_grasp_interfaces::srv::PosePostProcService>::SharedPtr server_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_subscriber_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_subscriber_;
 
@@ -66,7 +68,6 @@ private:
   bool read_depth_;
   bool read_pose_;
   bool success_srv_;
-  bool optimizer_;
   std::string object_name_;
   geometry_msgs::msg::PoseStamped estimated_pose_msgs_[SAMPLE_AVERAGE];
   sensor_msgs::msg::Image depth_msgs_[SAMPLE_AVERAGE];
@@ -166,25 +167,19 @@ private:
     }
   }
 
-  auto calculate_pose(const geometry_msgs::msg::PoseStamped &obj_pose, const std::string &frame_to_transform)
+  auto transform_pose(const geometry_msgs::msg::PoseStamped &obj_pose, const std::string &frame_to_transform)
   {
     /* Reading transform camera_T_new (camera_frame - up, new_frame - down) */
     bool getTransform_ = false;
     geometry_msgs::msg::TransformStamped transform_CB;
     while (!getTransform_)
-      getTransform_ = lv::getTransform(tf_listner_node, obj_pose.header.frame_id, frame_to_transform, transform_CB);
+      getTransform_ = uclv::getTransform(this->shared_from_this(), obj_pose.header.frame_id, frame_to_transform, transform_CB);
 
-    if (getTransform_)
-      lv::print_geometry_transform(transform_CB.transform);
-
-    Eigen::Isometry3d T_CB = lv::geometry_2_eigen(transform_CB.transform);
+    Eigen::Isometry3d T_CB = uclv::geometry_2_eigen(transform_CB.transform);
+    uclv::print_geometry_transform(transform_CB.transform);
 
     /* Transform camera_T_object (camera_frame - up, object_frame - down) */
-    Eigen::Vector3d translation_OC(obj_pose.pose.position.x, obj_pose.pose.position.y, obj_pose.pose.position.z);
-    Eigen::Quaterniond orientation_OC(obj_pose.pose.orientation.w, obj_pose.pose.orientation.x, obj_pose.pose.orientation.y, obj_pose.pose.orientation.z);
-    Eigen::Isometry3d T_OC(orientation_OC);
-    T_OC.translation() = translation_OC;
-    Eigen::Isometry3d T_OC = lv::geometry_2_eigen(obj_pose.pose);
+    Eigen::Isometry3d T_OC = uclv::geometry_2_eigen(obj_pose.pose);
 
     /* Calculate frame object-base*/
     Eigen::Isometry3d T_OB;
@@ -192,25 +187,16 @@ private:
 
     /* return the transformed pose */
     geometry_msgs::msg::PoseStamped transformed_pose;
-    Eigen::Quaterniond orientation_transformed_pose(T_OB.rotation());
-
-    transformed_pose.header.stamp = ros::Time::now();
+    transformed_pose.header.stamp = obj_pose.header.stamp;
     transformed_pose.header.frame_id = frame_to_transform;
-    transformed_pose.pose.position.x = T_OB.translation().x();
-    transformed_pose.pose.position.y = T_OB.translation().y();
-    transformed_pose.pose.position.z = T_OB.translation().z();
-
-    transformed_pose.pose.orientation.w = orientation_transformed_pose.w();
-    transformed_pose.pose.orientation.x = orientation_transformed_pose.x();
-    transformed_pose.pose.orientation.y = orientation_transformed_pose.y();
-    transformed_pose.pose.orientation.z = orientation_transformed_pose.z();
+    transformed_pose.pose = uclv::eigen_2_geometry(T_OB);
 
     return transformed_pose;
   }
 
   void handle_service_request(
-      const std::shared_ptr<lv_grasp_interfaces::srv::PosePostProcService::Request> request,
-      std::shared_ptr<lv_grasp_interfaces::srv::PosePostProcService::Response> response)
+      const std::shared_ptr<uclv_grasp_interfaces::srv::PosePostProcService::Request> request,
+      std::shared_ptr<uclv_grasp_interfaces::srv::PosePostProcService::Response> response)
   {
     // initialization
     RCLCPP_INFO(this->get_logger(), "Callback get_grasp_pose_service\n");
@@ -225,6 +211,7 @@ private:
       RCLCPP_INFO(this->get_logger(), "Different object type received\n");
       RCLCPP_INFO(this->get_logger(), "Subscription to the topic: /pose_ + %s \n", object_name_.c_str());
     }
+    
     // if requested, compute the mean of the poses and depth maps
     geometry_msgs::msg::PoseStamped estimated_pose;
     float depth_matrix[HEIGHT * WIDTH];
@@ -269,6 +256,7 @@ private:
         }
       }
     }
+
     // Invoke the depth optimization service if required
     depth_optimization_interfaces::srv::DepthOptimize::Response::SharedPtr result_depth_optimization;
     if (request->optimize_pose == true)
@@ -283,7 +271,7 @@ private:
           RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the service. Exiting.");
           return;
         }
-        RCLCPP_INFO(this->get_logger(), "service not available, waiting again...");
+        RCLCPP_INFO(this->get_logger(), "Service not available, waiting again...");
       }
       auto request_depth_optimization = std::make_shared<depth_optimization_interfaces::srv::DepthOptimize::Request>();
       request_depth_optimization->estimated_pose = estimated_pose;
@@ -317,19 +305,25 @@ private:
       }
     }
     // Convert the pose to the required frame if required
+    if (request->frame_to_transform.data != "")
+    {
+      RCLCPP_INFO(this->get_logger(), "Transforming the pose in the required frame...\n");
+      estimated_pose = transform_pose(estimated_pose, request->frame_to_transform.data);
+    }
 
     // Return the optimized pose
     if (success_srv_)
     {
-      RCLCPP_ERROR(this->get_logger(), "The pose is correctly post processed");
+      RCLCPP_ERROR(this->get_logger(), "The pose has been correctly post processed");
+      response->estimated_pose = estimated_pose;
       response->refined_pose = result_depth_optimization.get()->refined_pose;
       response->scale_obj = result_depth_optimization.get()->scale_obj;
       response->scaled_cuboid_dimensions = result_depth_optimization.get()->scaled_cuboid_dimension;
     }
     else
     {
-      RCLCPP_ERROR(this->get_logger(), "The pose has been correctly processed");
-      response->refined_pose = estimated_pose;
+      RCLCPP_ERROR(this->get_logger(), "ERROR: The pose has not been correctly post processed");
+      response->estimated_pose = estimated_pose;
     }
   }
 };
