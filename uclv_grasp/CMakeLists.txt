@@ -24,8 +24,12 @@ ament_target_dependencies(pose_post_proc_server rclcpp
                           sensor_msgs std_msgs tf2_ros cv_bridge 
                           depth_optimization_interfaces uclv_utilities)
 
+add_executable(srv_post_proc_client src/srv_post_proc_client.cpp)
+ament_target_dependencies(srv_post_proc_client rclcpp uclv_grasp_interfaces std_msgs)
+
 install(TARGETS
   pose_post_proc_server 
+  srv_post_proc_client
   DESTINATION lib/${PROJECT_NAME})
 
 

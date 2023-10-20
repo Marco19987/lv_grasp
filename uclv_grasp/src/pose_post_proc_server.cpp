@@ -44,9 +44,10 @@ public:
     read_depth_ = false;
     read_pose_ = false;
     success_srv_ = true;
-    std::string camera_topic = "/camera/depth/image_raw";
+
+    std::string camera_topic = "/camera/aligned_depth_to_color/image_raw";
     // Create the pose subscriber
-    subscribe_to_pose_topic("/pose_" + object_name_);
+    subscribe_to_pose_topic("/dope/pose_" + object_name_);
 
     // Create the depth subscriber
     depth_subscriber_ = this->create_subscription<sensor_msgs::msg::Image>(
@@ -57,7 +58,6 @@ public:
         "pose_post_proc_service",
         std::bind(&PosePostProcServer::handle_service_request, this, std::placeholders::_1, std::placeholders::_2));
     RCLCPP_INFO(this->get_logger(), "Pose post processing service server ready!");
-    RCLCPP_INFO_STREAM(this->get_logger(), "Subscription to the topic: /pose_" << object_name_ << "\n");
     RCLCPP_INFO_STREAM(this->get_logger(), "Subscription to the topic: " << camera_topic << "\n");
   }
 
@@ -100,6 +100,7 @@ private:
     // Create the subscriber with the new topic name
     pose_subscriber_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
         topic_name, 1, std::bind(&PosePostProcServer::pose_obj_callback, this, std::placeholders::_1));
+    RCLCPP_INFO_STREAM(this->get_logger(), "Subscription to the topic: " << topic_name << "\n");
   }
 
   void depth_callback(const sensor_msgs::msg::Image::SharedPtr msg)
@@ -149,6 +150,8 @@ private:
     estimated_pose_msg.pose.orientation.x = estimated_pose_msg.pose.orientation.x / SAMPLE_AVERAGE;
     estimated_pose_msg.pose.orientation.y = estimated_pose_msg.pose.orientation.y / SAMPLE_AVERAGE;
     estimated_pose_msg.pose.orientation.z = estimated_pose_msg.pose.orientation.z / SAMPLE_AVERAGE;
+
+    estimated_pose_msg.header.frame_id = estimated_pose_msgs_[0].header.frame_id;
   }
   void average_depth(float depth_matrix[HEIGHT * WIDTH], cv::Mat depth_cv[SAMPLE_AVERAGE])
   {
@@ -175,7 +178,7 @@ private:
     /* Reading transform camera_T_new (camera_frame - up, new_frame - down) */
     bool getTransform_ = false;
     geometry_msgs::msg::TransformStamped transform_CB;
-    while (!getTransform_)
+    while (!getTransform_ && rclcpp::ok())
       getTransform_ = uclv::getTransform(this->shared_from_this(), obj_pose.header.frame_id, frame_to_transform, transform_CB);
 
     Eigen::Isometry3d T_CB = uclv::geometry_2_eigen(transform_CB.transform);
@@ -223,7 +226,7 @@ private:
     {
       RCLCPP_INFO(this->get_logger(), "Computing the mean of the poses and depth maps...\n");
       rclcpp::Rate rate(10);
-      while (!read_depth_ || !read_pose_)
+      while ((!read_depth_ || !read_pose_) && rclcpp::ok())
       {
         RCLCPP_INFO(this->get_logger(), "Waiting for pose and depth messages... (sample_depth=%d, sample_pose=%d)\n", sample_depth_, sample_pose_);
         rate.sleep();
@@ -266,7 +269,7 @@ private:
     {
       RCLCPP_INFO(this->get_logger(), "Optimization required: invoking the depth optimization service...\n");
       rclcpp::Client<depth_optimization_interfaces::srv::DepthOptimize>::SharedPtr client =
-          this->create_client<depth_optimization_interfaces::srv::DepthOptimize>("/depth_optimization_service");
+          this->create_client<depth_optimization_interfaces::srv::DepthOptimize>("/depth_optimize");
       while (!client->wait_for_service(std::chrono::seconds(1)))
       {
         if (!rclcpp::ok())
