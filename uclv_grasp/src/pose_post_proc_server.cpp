@@ -44,18 +44,21 @@ public:
     read_depth_ = false;
     read_pose_ = false;
     success_srv_ = true;
-
+    std::string camera_topic = "/camera/depth/image_raw";
     // Create the pose subscriber
     subscribe_to_pose_topic("/pose_" + object_name_);
 
     // Create the depth subscriber
     depth_subscriber_ = this->create_subscription<sensor_msgs::msg::Image>(
-        "/camera/depth/image_raw", 1, std::bind(&PosePostProcServer::depth_callback, this, std::placeholders::_1));
+        camera_topic, 1, std::bind(&PosePostProcServer::depth_callback, this, std::placeholders::_1));
 
     // Create the service server
     server_ = this->create_service<uclv_grasp_interfaces::srv::PosePostProcService>(
         "pose_post_proc_service",
         std::bind(&PosePostProcServer::handle_service_request, this, std::placeholders::_1, std::placeholders::_2));
+    RCLCPP_INFO(this->get_logger(), "Pose post processing service server ready!");
+    RCLCPP_INFO_STREAM(this->get_logger(), "Subscription to the topic: /pose_" << object_name_ << "\n");
+    RCLCPP_INFO_STREAM(this->get_logger(), "Subscription to the topic: " << camera_topic << "\n");
   }
 
 private:
@@ -211,7 +214,7 @@ private:
       RCLCPP_INFO(this->get_logger(), "Different object type received\n");
       RCLCPP_INFO(this->get_logger(), "Subscription to the topic: /pose_ + %s \n", object_name_.c_str());
     }
-    
+
     // if requested, compute the mean of the poses and depth maps
     geometry_msgs::msg::PoseStamped estimated_pose;
     float depth_matrix[HEIGHT * WIDTH];
