@@ -158,18 +158,12 @@ private:
     estimated_pose_msg.pose.position.y = estimated_pose_msg.pose.position.y / SAMPLE_AVERAGE;
     estimated_pose_msg.pose.position.z = estimated_pose_msg.pose.position.z / SAMPLE_AVERAGE;
 
-    // estimated_pose_msg.pose.orientation.w = estimated_pose_msg.pose.orientation.w / SAMPLE_AVERAGE;
-    // estimated_pose_msg.pose.orientation.x = estimated_pose_msg.pose.orientation.x / SAMPLE_AVERAGE;
-    // estimated_pose_msg.pose.orientation.y = estimated_pose_msg.pose.orientation.y / SAMPLE_AVERAGE;
-    // estimated_pose_msg.pose.orientation.z = estimated_pose_msg.pose.orientation.z / SAMPLE_AVERAGE;
     double w = estimated_pose_msg.pose.orientation.w / SAMPLE_AVERAGE;
     double x = estimated_pose_msg.pose.orientation.x / SAMPLE_AVERAGE;
     double y = estimated_pose_msg.pose.orientation.y / SAMPLE_AVERAGE;
     double z = estimated_pose_msg.pose.orientation.z / SAMPLE_AVERAGE;
 
-    double quat_norm = std::sqrt(std::pow(w,2)+std::pow(x,2)+std::pow(y,2)+std::pow(z,2));
-    std::cout << "quaternion medium w||x||y||z " << w << " || " << x << " || " <<  y << " || " <<  z << "\n";
-    std::cout << "quat norm: " << quat_norm << "\n";
+    double quat_norm = std::sqrt(std::pow(w, 2) + std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
     estimated_pose_msg.pose.orientation.w = w / quat_norm;
     estimated_pose_msg.pose.orientation.x = x / quat_norm;
     estimated_pose_msg.pose.orientation.y = y / quat_norm;
@@ -295,12 +289,23 @@ private:
     else
     {
       RCLCPP_INFO(this->get_logger(), "No mean was required\n");
+      rclcpp::Rate rate(10);
+      while ((sample_pose_ == 0 || sample_depth_ == 0) && rclcpp::ok())
+      {
+        RCLCPP_INFO(this->get_logger(), "Waiting for pose and depth messages... (sample_depth=%d, sample_pose=%d)\n", sample_depth_, sample_pose_);
+        rate.sleep();
+      }
+
+      estimated_pose = estimated_pose_msgs_[sample_pose_ - 1];
       RCLCPP_INFO(this->get_logger(), "Readed estimated pose:\n");
-      estimated_pose = estimated_pose_msgs_[sample_pose_];
       RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(estimated_pose));
 
       cv::Mat depth_cv;
-      get_real_depth(depth_msgs_[sample_depth_], depth_cv);
+      get_real_depth(depth_msgs_[sample_depth_ - 1], depth_cv);
+      for (int i = 0; i < HEIGHT * WIDTH; i++)
+      {
+        depth_matrix[i] = 0.0;
+      }
       for (int i = 0; i < HEIGHT; i++)
       {
         for (int j = 0; j < WIDTH; j++)
@@ -337,27 +342,36 @@ private:
         handle_depth_optimization_response(result_depth_optimization_feature.share());
       else
         RCLCPP_ERROR(this->get_logger(), "Invoking depth optimization service error");
-    }
-    // Convert the pose to the required frame if required
-    if (request->frame_to_transform.data != "")
-    {
-      RCLCPP_INFO(this->get_logger(), "Transforming the pose in the required frame...\n");
-      estimated_pose = transform_pose(estimated_pose, request->frame_to_transform.data);
-      result_depth_optimization_->refined_pose = transform_pose(result_depth_optimization_->refined_pose, request->frame_to_transform.data);
-    }
 
-    // Return the optimized pose
-    if (success_srv_)
-    {
-      RCLCPP_INFO(this->get_logger(), "The pose has been correctly post processed");
-      response->estimated_pose = estimated_pose;
-      response->refined_pose = result_depth_optimization_->refined_pose;
-      response->scale_obj = result_depth_optimization_->scale_obj;
-      response->scaled_cuboid_dimension = result_depth_optimization_->scaled_cuboid_dimension;
+      // Convert the pose to the required frame if required
+      if (request->frame_to_transform.data != "")
+      {
+        RCLCPP_INFO(this->get_logger(), "Transforming the pose in the required frame...\n");
+        estimated_pose = transform_pose(estimated_pose, request->frame_to_transform.data);
+        result_depth_optimization_->refined_pose = transform_pose(result_depth_optimization_->refined_pose, request->frame_to_transform.data);
+      }
+      if (success_srv_)
+      {
+        RCLCPP_INFO(this->get_logger(), "The pose has been correctly post processed");
+        response->estimated_pose = estimated_pose;
+        response->refined_pose = result_depth_optimization_->refined_pose;
+        response->scale_obj = result_depth_optimization_->scale_obj;
+        response->scaled_cuboid_dimension = result_depth_optimization_->scaled_cuboid_dimension;
+      }
+      else
+      {
+        RCLCPP_ERROR(this->get_logger(), "ERROR: The pose has not been correctly post processed");
+        response->estimated_pose = estimated_pose;
+      }
     }
     else
     {
-      RCLCPP_ERROR(this->get_logger(), "ERROR: The pose has not been correctly post processed");
+      if (request->frame_to_transform.data != "")
+      {
+        RCLCPP_INFO(this->get_logger(), "Transforming the pose in the required frame...\n");
+        estimated_pose = transform_pose(estimated_pose, request->frame_to_transform.data);
+      }
+      RCLCPP_INFO(this->get_logger(), "The pose has been correctly post processed");
       response->estimated_pose = estimated_pose;
     }
   }
