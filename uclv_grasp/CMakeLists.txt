@@ -16,6 +16,8 @@ find_package(tf2_ros REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(depth_optimization_interfaces REQUIRED)
 find_package(uclv_utilities REQUIRED)
+find_package(uclv_moveit_planner_interface REQUIRED)
+find_package(moveit_ros_planning_interface REQUIRED)
 
 
 add_executable(pose_post_proc_server src/pose_post_proc_server.cpp)
@@ -33,6 +35,21 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME})
 
 
+add_executable(pp_traj_server src/pp_traj_server.cpp)
+ament_target_dependencies(pp_traj_server rclcpp geometry_msgs moveit_ros_planning_interface uclv_utilities uclv_moveit_planner_interface uclv_grasp_interfaces)
+install(TARGETS
+  pp_traj_server
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(test_pp_client src/test_pp_client.cpp)
+ament_target_dependencies(test_pp_client rclcpp geometry_msgs moveit_ros_planning_interface uclv_utilities uclv_moveit_planner_interface uclv_grasp_interfaces)
+install(TARGETS
+  test_pp_client
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -41,7 +58,7 @@ if(BUILD_TESTING)
   # the following line skips cpplint (only works in a git repo)
   # comment the line when this package is in a git repo and when
   # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
+  #set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
 

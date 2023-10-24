@@ -1,0 +1,13 @@
+geometry_msgs/PoseStamped[] pre_grasp_poses
+geometry_msgs/PoseStamped pick_pose
+geometry_msgs/PoseStamped pre_place_pose
+geometry_msgs/PoseStamped place_pose
+string target_frame
+---
+int32 selected_pre_grasp_pose
+bool success 
+moveit_msgs/RobotTrajectory traj_home_pre_grasp
+moveit_msgs/RobotTrajectory traj_pre_grasp_pick
+moveit_msgs/RobotTrajectory traj_pick_post_grasp
+moveit_msgs/RobotTrajectory traj_post_grasp_pre_place
+moveit_msgs/RobotTrajectory traj_pre_place_place

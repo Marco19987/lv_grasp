@@ -10,7 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
-  <depend>lv_grasp_interfaces</depend>
+  <depend>uclv_grasp_interfaces</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
@@ -18,6 +18,8 @@
   <depend>cv_bridge</depend>
   <depend>depth_optimization_interfaces</depend>
   <depend>uclv_utilities</depend>
+  <depend>uclv_moveit_planner_interface</depend>
+
   
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
