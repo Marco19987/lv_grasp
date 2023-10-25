@@ -18,6 +18,7 @@ find_package(depth_optimization_interfaces REQUIRED)
 find_package(uclv_utilities REQUIRED)
 find_package(uclv_moveit_planner_interface REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(moveit_ros_planning_interface REQUIRED)
 
 
 add_executable(pose_post_proc_server src/pose_post_proc_server.cpp)

@@ -9,7 +9,6 @@
                 -> estimated pose (geometry_msgs/pose_stamped)
                 -> refined pose (geometry_msgs/pose_stamped)
                 -> scale_obj (float)
-                -> scaled_cuboid_dimensions (std_msgs/float32[3])
 
 The parameter object_name defines the topic from wich the node will read the 6d poses: "/pose_object_name"
 if optimize_pose is True, the service server read the depth map from the camera topic and calls the service for the pose refinement,
@@ -229,11 +228,6 @@ private:
       RCLCPP_INFO(this->get_logger(), "Optimized pose:\n");
       RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(result_depth_optimization.get()->refined_pose));
       RCLCPP_INFO_STREAM(this->get_logger(), "scale_obj: " << result_depth_optimization.get()->scale_obj);
-      RCLCPP_INFO_STREAM(this->get_logger(), "cad dimension scaled: ");
-      for (int i = 0; i < 3; i++)
-      {
-        RCLCPP_INFO_STREAM(this->get_logger(), result_depth_optimization.get()->scaled_cuboid_dimension.at(i));
-      }
       this->result_depth_optimization_ = result_depth_optimization.get();
     }
     else
@@ -356,7 +350,6 @@ private:
         response->estimated_pose = estimated_pose;
         response->refined_pose = result_depth_optimization_->refined_pose;
         response->scale_obj = result_depth_optimization_->scale_obj;
-        response->scaled_cuboid_dimension = result_depth_optimization_->scaled_cuboid_dimension;
       }
       else
       {

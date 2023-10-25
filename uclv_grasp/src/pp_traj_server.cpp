@@ -74,87 +74,99 @@ private:
 
         while (!success_planning_pp && i < num_attempts)
         {
-            std::cout << BOLDWHITE << "Attempt " << i << " of " << num_attempts << RESET << std::endl;
+            std::cout << BOLDWHITE << "Attempt " << i + 1 << " of " << num_attempts << RESET << std::endl;
             // Planning from the actual pose of the robot to the i-esim pre-grasp pose of the object in the joint space
+            std::cout << BOLDWHITE << "Planning: " << RESET << std::endl;
+            std::cout << BOLDMAGENTA << "   1. CURRENT_POSE -> PRE_GRASP: " << RESET << std::flush;
             planner_response_ = planning_service_call_i(planner_request, request->pre_grasp_poses[i], std::vector<double>(), "joint");
             success_i = planner_response_->success;
             if (success_i)
             {
-                std::cout << BOLDGREEN << "Planning from current pose to pre-grasp one successfully created! " << RESET << std::endl;
+                std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                 traj_home_pre_grasp_ = planner_response_->traj;
 
                 uclv::askContinue();
 
                 // Planning from the i-esim pre-grasp pose of the object to the pick pose in the cartesian space
+                std::cout << BOLDMAGENTA << "   2. PRE_GRASP -> PICK: " << RESET << std::flush;
                 planner_response_ = planning_service_call_i(planner_request, request->pick_pose, traj_home_pre_grasp_.joint_trajectory.points.back().positions, "cartesian");
                 success_i = planner_response_->success;
                 if (success_i)
                 {
-                    std::cout << BOLDGREEN << "Planning trajectory from pre-grasp pose to pick one successfully created! " << RESET << std::endl;
+                    std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                     traj_pre_grasp_pick_ = planner_response_->traj;
 
                     uclv::askContinue();
 
                     // Planning from the pick pose to the post-grasp pose in the cartesian space
+                    std::cout << BOLDMAGENTA << "   3. PICK -> POST_GRASP: " << RESET << std::flush;
                     planner_response_ = planning_service_call_i(planner_request, request->pre_grasp_poses[i], traj_pre_grasp_pick_.joint_trajectory.points.back().positions, "cartesian");
                     success_i = planner_response_->success;
 
                     if (success_i)
                     {
                         request->pick_pose.pose.orientation = request->pre_grasp_poses[i].pose.orientation;
-                        std::cout << BOLDGREEN << "Planning trajectory from pick pose to post-grasp one successfully created! " << RESET << std::endl;
+                        std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                         traj_pick_post_grasp_ = planner_response_->traj;
 
                         uclv::askContinue();
 
                         // Planning from the post-grasp pose to the pre-place pose in the joint space
+                        std::cout << BOLDMAGENTA << "   4. POST_GRASP -> PRE_PLACE: " << RESET << std::flush;
                         planner_response_ = planning_service_call_i(planner_request, request->pre_place_pose, traj_pick_post_grasp_.joint_trajectory.points.back().positions, "joint");
                         success_i = planner_response_->success;
 
                         if (success_i)
                         {
-                            std::cout << BOLDGREEN << "Planning trajectory from post-grasp pose to pre-place one successfully created! " << RESET << std::endl;
+                            std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                             traj_post_grasp_pre_place_ = planner_response_->traj;
 
                             uclv::askContinue();
+
                             // Planning from the pre-place pose to the place pose in the cartesian space
+                            std::cout << BOLDMAGENTA << "   5. PRE_PLACE -> PLACE: " << RESET << std::flush;
                             planner_response_ = planning_service_call_i(planner_request, request->place_pose, traj_post_grasp_pre_place_.joint_trajectory.points.back().positions, "joint");
                             success_i = planner_response_->success;
 
                             if (success_i)
                             {
-                                std::cout << BOLDGREEN << "Planning trajectory from pre-place pose to place one successfully created! " << RESET << std::endl;
+                                std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                                 traj_pre_place_place_ = planner_response_->traj;
                                 success_planning_pp = true;
                                 success = true;
                             }
                             else
                             {
-                                std::cout << BOLDRED << "Planning to place pose failed! Trying with the next attempt.." << RESET << std::endl;
+                                std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
+                                std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
                                 i++;
                             }
                         }
                         else
                         {
-                            std::cout << BOLDRED << "Planning to place pose failed! Trying with the next attempt.." << RESET << std::endl;
+                            std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
+                            std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
                             i++;
                         }
                     }
                     else
                     {
-                        std::cout << BOLDRED << "Planning to place pose failed! Trying with the next attempt.." << RESET << std::endl;
+                        std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
+                        std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
                         i++;
                     }
                 }
                 else
                 {
-                    std::cout << BOLDRED << "Planning to pick pose failed! Trying with the next attempt.." << RESET << std::endl;
+                    std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
+                    std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
                     i++;
                 }
             }
             else
             {
-                std::cout << BOLDRED << "Planning to pre-grasp pose failed! Trying with the next attempt.." << RESET << std::endl;
+                std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
+                std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
                 i++;
             }
 
@@ -177,16 +189,16 @@ private:
     std::shared_ptr<uclv_moveit_planner_interface::srv::PlannerSrv_Response> planning_service_call_i(std::shared_ptr<uclv_moveit_planner_interface::srv::PlannerSrv_Request> planner_request,
                                                                                                      const geometry_msgs::msg::PoseStamped &pose_, const std::vector<double> &start_joints, std::string planning_type)
     {
-        std::cout << BOLDGREEN << "Creating request for planning server callback" << RESET << std::endl;
+        // std::cout << BOLDGREEN << "Creating request for planning server callback" << RESET << std::endl;
         // Planning from the actual pose of the robot to the i-esim pre-grasp pose of the object in the joint space
         ;
         planner_request->start_joints = start_joints;
         planner_request->planning_type = planning_type;
         planner_request->pose = pose_;
         auto planner_response = planner_client_->async_send_request(planner_request);
-        std::cout << BOLDWHITE << "Planning type: " << planning_type << RESET << std::endl;
+        // std::cout << BOLDWHITE << "Planning type: " << planning_type << RESET << std::endl;
         // Wait for the service response
-        std::future_status status = planner_response.wait_for(std::chrono::seconds(5));
+        std::future_status status = planner_response.wait_for(std::chrono::seconds(10));
         if (status == std::future_status::ready)
             return (planner_response.get());
         else
