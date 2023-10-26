@@ -54,17 +54,18 @@ public:
         auto pick_pose_base_link = uclv::transform_pose(this->shared_from_this(), this->pick_pose, "base_link");
         RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(pick_pose_base_link));
 
-        // orientation push_extension [-0.220, -0.243, 0.669, 0.667]
-        pick_pose_base_link.pose.orientation.x = -0.220;
-        pick_pose_base_link.pose.orientation.y = -0.243;
-        pick_pose_base_link.pose.orientation.z = 0.669;
-        pick_pose_base_link.pose.orientation.w = 0.667;
+        // orientation push_extension [-0.075, -0.160, 0.705, 0.687]
+        // pick_pose_base_link.pose.orientation.x = -0.220;
+        // pick_pose_base_link.pose.orientation.y = -0.243;
+        // pick_pose_base_link.pose.orientation.z = 0.669;
+        // pick_pose_base_link.pose.orientation.w = 0.667;
 
         // orientation ee_fingers [0.945, -0.000, 0.328, -0.000]
-        // pick_pose_base_link.pose.orientation.x = 0.945;
-        // pick_pose_base_link.pose.orientation.y = -0.000;
-        // pick_pose_base_link.pose.orientation.z = 0.328;
-        // pick_pose_base_link.pose.orientation.w = -0.000;
+        // [0.985, 0.014, 0.167, 0.044]
+        pick_pose_base_link.pose.orientation.x = 0.985;
+        pick_pose_base_link.pose.orientation.y = 0.014;
+        pick_pose_base_link.pose.orientation.z = 0.167;
+        pick_pose_base_link.pose.orientation.w = 0.044;
 
         geometry_msgs::msg::PoseStamped pre_grasp_pose = pick_pose_base_link;
         pre_grasp_pose.pose.position.z = pre_grasp_pose.pose.position.z + 0.10;
@@ -84,7 +85,7 @@ public:
 
         std::cout << BOLDWHITE << "Creating planning request..." << RESET << std::endl;
         planner_request = std::make_shared<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv_Request>();
-        planner_request->target_frame = "push_extension";
+        planner_request->target_frame = "ee_fingers";
         planner_request->pre_grasp_poses.push_back(pre_grasp_pose);
         planner_request->pick_pose = pick_pose_base_link;
         planner_request->pre_place_pose = pre_place_pose;
