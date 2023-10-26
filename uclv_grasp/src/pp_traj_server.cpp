@@ -85,7 +85,8 @@ private:
                 std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                 traj_home_pre_grasp_ = planner_response_->traj;
 
-                uclv::askContinue();
+                if (!uclv::askContinue())
+                    break;
 
                 // Planning from the i-esim pre-grasp pose of the object to the pick pose in the cartesian space
                 std::cout << BOLDMAGENTA << "   2. PRE_GRASP -> PICK: " << RESET << std::flush;
@@ -96,7 +97,8 @@ private:
                     std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                     traj_pre_grasp_pick_ = planner_response_->traj;
 
-                    uclv::askContinue();
+                    if (!uclv::askContinue())
+                        break;
 
                     // Planning from the pick pose to the post-grasp pose in the cartesian space
                     std::cout << BOLDMAGENTA << "   3. PICK -> POST_GRASP: " << RESET << std::flush;
@@ -109,7 +111,8 @@ private:
                         std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                         traj_pick_post_grasp_ = planner_response_->traj;
 
-                        uclv::askContinue();
+                        if (!uclv::askContinue())
+                            break;
 
                         // Planning from the post-grasp pose to the pre-place pose in the joint space
                         std::cout << BOLDMAGENTA << "   4. POST_GRASP -> PRE_PLACE: " << RESET << std::flush;
@@ -121,7 +124,8 @@ private:
                             std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                             traj_post_grasp_pre_place_ = planner_response_->traj;
 
-                            uclv::askContinue();
+                            if (!uclv::askContinue())
+                                break;
 
                             // Planning from the pre-place pose to the place pose in the cartesian space
                             std::cout << BOLDMAGENTA << "   5. PRE_PLACE -> PLACE: " << RESET << std::flush;

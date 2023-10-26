@@ -54,18 +54,19 @@ public:
         auto pick_pose_base_link = uclv::transform_pose(this->shared_from_this(), this->pick_pose, "base_link");
         RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(pick_pose_base_link));
 
-        // orientation push_extension [-0.075, -0.160, 0.705, 0.687]
-        // pick_pose_base_link.pose.orientation.x = -0.220;
-        // pick_pose_base_link.pose.orientation.y = -0.243;
-        // pick_pose_base_link.pose.orientation.z = 0.669;
-        // pick_pose_base_link.pose.orientation.w = 0.667;
+        geometry_msgs::msg::TransformStamped transform;
 
-        // orientation ee_fingers [0.945, -0.000, 0.328, -0.000]
-        // [0.985, 0.014, 0.167, 0.044]
-        pick_pose_base_link.pose.orientation.x = 0.985;
-        pick_pose_base_link.pose.orientation.y = 0.014;
-        pick_pose_base_link.pose.orientation.z = 0.167;
-        pick_pose_base_link.pose.orientation.w = 0.044;
+        if (uclv::getTransform(this->shared_from_this(), "base_link", "ee_fingers", transform))
+            pick_pose_base_link.pose.orientation = transform.transform.rotation; // 0.985;
+        else
+        {
+            std::cout << BOLDRED << "Failed to get transform" << RESET << std::endl;
+            rclcpp::shutdown();
+        }
+
+        // pick_pose_base_link.pose.orientation.y = 0.014;
+        // pick_pose_base_link.pose.orientation.z = 0.167;
+        // pick_pose_base_link.pose.orientation.w = 0.044;
 
         geometry_msgs::msg::PoseStamped pre_grasp_pose = pick_pose_base_link;
         pre_grasp_pose.pose.position.z = pre_grasp_pose.pose.position.z + 0.10;
