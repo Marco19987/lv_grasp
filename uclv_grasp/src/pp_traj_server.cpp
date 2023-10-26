@@ -5,6 +5,7 @@
 #include "uclv_utilities/color.h"
 #include "uclv_utilities/utilities.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "uclv_moveit_planner_ros2/scene.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -71,6 +72,8 @@ private:
         bool success_planning_pp = false;
         int num_attempts = int(request->pre_grasp_poses.size());
         int i = 0;
+
+        uclv::SceneMoveIt scene(this->shared_from_this(), true);
 
         while (!success_planning_pp && i < num_attempts)
         {

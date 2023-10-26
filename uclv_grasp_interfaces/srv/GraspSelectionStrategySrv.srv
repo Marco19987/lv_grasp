@@ -1,0 +1,7 @@
+geometry_msgs/PoseStamped object_pose
+std_msgs/String object_type
+---
+geometry_msgs/PoseStamped[] pre_grasp_poses
+bool success 
+
+
