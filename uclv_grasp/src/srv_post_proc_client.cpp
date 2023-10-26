@@ -38,42 +38,47 @@ int main(int argc, char **argv)
     rclcpp::Client<uclv_grasp_interfaces::srv::PosePostProcService>::SharedPtr client =
         node->create_client<uclv_grasp_interfaces::srv::PosePostProcService>("pose_post_proc_service");
 
-    // {
-    //     // Set the mesh for the DepthOptimizerServer node
-    //     set_parameters_client_ = create_client<rcl_interfaces::srv::SetParameters>("/depth_optimizer_server/set_parameters");
+    {
+        // Set the mesh for the DepthOptimizerServer node
+        rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedPtr set_parameters_client_ =
+            node->create_client<rcl_interfaces::srv::SetParameters>("/depth_optimizer_server/set_parameters");
 
-    //     // Wait for service
-    //     while (!set_parameters_client_->wait_for_service(std::chrono::seconds(1)))
-    //     {
-    //         RCLCPP_INFO(node->get_logger(), "Service /depth_optimizer_server/set_parameters non available. Waiting...");
-    //     }
-    
-    //     // Set the parameters
-    //     std::vector<rcl_interfaces::msg::Parameter> parameters;
-    //     rcl_interfaces::msg::Parameter mesh_path_param;
-    //     mesh_path_param.name = "mesh_path";
-    //     mesh_path_param.value = "cad.obj";
-    //     parameters.push_back(mesh_path_param);
-    //     rcl_interfaces::msg::Parameter mesh_scale_param;
-    //     mesh_scale_param.name = "mesh_scale";
-    //     mesh_scale_param.value = 0.001;
-    //     parameters.push_back(mesh_scale_param);
+        // Wait for service
+        while (!set_parameters_client_->wait_for_service(std::chrono::seconds(1)))
+        {
+            RCLCPP_INFO(node->get_logger(), "Service /depth_optimizer_server/set_parameters non available. Waiting...");
+        }
 
-    //     // Send the request
-    //     auto request = std::make_shared<rcl_interfaces::srv::SetParameters::Request>();
-    //     request->parameters = parameters;
-    //     auto future = set_parameters_client_->async_send_request(request);
-    //     rclcpp::spin_until_future_complete(node, future);
+        // Set the parameters
+        std::vector<rcl_interfaces::msg::Parameter> parameters;
 
-    //     if (rclcpp::ok() && future.get()->successful)
-    //     {
-    //         RCLCPP_INFO(node->get_logger(), "Parameters set");
-    //     }
-    //     else
-    //     {
-    //         RCLCPP_ERROR(node->get_logger(), "Failed to set parameters");
-    //     }
-    // }
+        rcl_interfaces::msg::Parameter mesh_path_param;
+        mesh_path_param.name = "mesh_path";
+        mesh_path_param.value.type = rclcpp::PARAMETER_STRING;
+        mesh_path_param.value.string_value = "/home/sfederico/Documents/cad_models/Apple/Apple_4K/food_apple_01_4k.obj";
+        parameters.push_back(mesh_path_param);
+
+        rcl_interfaces::msg::Parameter mesh_scale_param;
+        mesh_scale_param.name = "mesh_scale";
+        mesh_scale_param.value.type = rclcpp::PARAMETER_DOUBLE;
+        mesh_scale_param.value.double_value = 1;
+        parameters.push_back(mesh_scale_param);
+
+        // Send the request
+        auto request = std::make_shared<rcl_interfaces::srv::SetParameters::Request>();
+        request->parameters = parameters;
+        auto future = set_parameters_client_->async_send_request(request);
+        rclcpp::spin_until_future_complete(node, future);
+
+        if (rclcpp::ok() && future.get()->results.back().successful)
+        {
+            RCLCPP_INFO(node->get_logger(), "Parameters set");
+        }
+        else
+        {
+            RCLCPP_ERROR(node->get_logger(), "Failed to set parameters");
+        }
+    }
 
     // Get the 6D pose of the object using the PostProcService node
     auto request = std::make_shared<uclv_grasp_interfaces::srv::PosePostProcService::Request>();
