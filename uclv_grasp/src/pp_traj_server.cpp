@@ -172,7 +172,7 @@ private:
                             {
                                 std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                                 std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
-                                auto obj_detached = obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+                                obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
 
                                 i++;
                             }
@@ -182,7 +182,7 @@ private:
                             std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                             std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
 
-                            auto obj_detached = obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+                            obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
 
                             i++;
                         }
@@ -191,7 +191,7 @@ private:
                     {
                         std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                         std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
-                        auto obj_detached = obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+                        obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
 
                         i++;
                     }
@@ -200,7 +200,7 @@ private:
                 {
                     std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                     std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
-                    auto obj_detached = obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+                    obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
 
                     i++;
                 }
