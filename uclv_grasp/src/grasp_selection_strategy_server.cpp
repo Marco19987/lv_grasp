@@ -19,7 +19,7 @@ public:
     PosePostProcServer() : Node("pose_post_proc_server")
     {
         // Create the service server
-        server_ = this->create_service<uclv_grasp_interfaces::srv::PosePostProcService>(
+        server_ = this->create_service<uclv_grasp_interfaces::srv::GraspSelectionStrategySrv>(
             "pose_post_proc_service",
             std::bind(&PosePostProcServer::handle_service_request, this, std::placeholders::_1, std::placeholders::_2));
     }

@@ -51,10 +51,11 @@ public:
     void get_planning()
     {
         RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(this->pick_pose));
-        auto pick_pose_base_link = uclv::transform_pose(this->shared_from_this(), this->pick_pose, "base_link");
-        RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(pick_pose_base_link));
+        auto obj_pose_base_link = uclv::transform_pose(this->shared_from_this(), this->pick_pose, "base_link");
+        RCLCPP_INFO_STREAM(this->get_logger(), geometry_msgs::msg::to_yaml(obj_pose_base_link));
 
         geometry_msgs::msg::TransformStamped transform;
+        geometry_msgs::msg::PoseStamped pick_pose_base_link = obj_pose_base_link;
 
         if (uclv::getTransform(this->shared_from_this(), "base_link", "ee_fingers", transform))
             pick_pose_base_link.pose.orientation = transform.transform.rotation; // 0.985;
@@ -88,7 +89,7 @@ public:
         planner_request = std::make_shared<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv_Request>();
         planner_request->target_frame = "ee_fingers";
         planner_request->pre_grasp_poses.push_back(pre_grasp_pose);
-        planner_request->pick_pose = pick_pose_base_link;
+        planner_request->pick_pose = obj_pose_base_link;
         planner_request->pre_place_pose = pre_place_pose;
         planner_request->place_pose = place_pose;
 
