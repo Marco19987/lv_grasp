@@ -1,6 +1,7 @@
 /* This node realizes a ROS2 service to plan from the pick pose until the place one*/
 #include "rclcpp/rclcpp.hpp"
 #include "uclv_moveit_planner_interface/srv/planner_srv.hpp"
+#include "uclv_moveit_planner_interface/srv/attach_detach_srv.hpp"
 #include "uclv_grasp_interfaces/srv/pick_and_place_traj_srv.hpp"
 #include "uclv_utilities/color.h"
 #include "uclv_utilities/utilities.hpp"
@@ -30,10 +31,14 @@ public:
 
         // Create the service client to call the planner service
         this->planner_client_ = create_client<uclv_moveit_planner_interface::srv::PlannerSrv>("planner_service", rmw_qos_profile_services_default, reentrant_cb_group_);
+
+        // Create the service client to call the attach/detach service
+        this->obj_client_ = create_client<uclv_moveit_planner_interface::srv::AttachDetachSrv>("obj_service", rmw_qos_profile_services_default, reentrant_cb_group_);
     }
 
 private:
     rclcpp::Client<uclv_moveit_planner_interface::srv::PlannerSrv>::SharedPtr planner_client_;
+    rclcpp::Client<uclv_moveit_planner_interface::srv::AttachDetachSrv>::SharedPtr obj_client_;
     rclcpp::Service<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv>::SharedPtr pp_traj_service_;
     moveit_msgs::msg::RobotTrajectory traj_home_pre_grasp_;
     moveit_msgs::msg::RobotTrajectory traj_pre_grasp_pick_;
@@ -73,8 +78,11 @@ private:
         int num_attempts = int(request->pre_grasp_poses.size());
         int i = 0;
 
+        std::cout << BOLDWHITE << "Creating collision object" << RESET << std::endl;
         uclv::SceneMoveIt scene(this->shared_from_this(), true);
-
+        auto obj = scene.createCollisionObjFromMesh("santal", request->pick_pose, "/home/sfederico/Documents/cad_models/santal_ace/santal_centered.obj", 0.001);
+        
+        std::cout << BOLDWHITE << "Created object with ID: " << RESET << obj.id << std::endl;
         while (!success_planning_pp && i < num_attempts)
         {
             std::cout << BOLDWHITE << "Attempt " << i + 1 << " of " << num_attempts << RESET << std::endl;
@@ -93,12 +101,22 @@ private:
 
                 // Planning from the i-esim pre-grasp pose of the object to the pick pose in the cartesian space
                 std::cout << BOLDMAGENTA << "   2. PRE_GRASP -> PICK: " << RESET << std::flush;
+                // Update the pick pose with the orientation of the pre-grasp pose
+                request->pick_pose.pose.orientation = request->pre_grasp_poses[i].pose.orientation;
                 planner_response_ = planning_service_call_i(planner_request, request->pick_pose, traj_home_pre_grasp_.joint_trajectory.points.back().positions, "cartesian");
                 success_i = planner_response_->success;
                 if (success_i)
                 {
                     std::cout << BOLDGREEN << "SUCCESS! " << RESET << std::endl;
                     traj_pre_grasp_pick_ = planner_response_->traj;
+
+                    // Object attach
+                    std::cout << BOLDWHITE << "Attaching object to the end-effector..." << RESET << std::endl;
+                    auto obj_attached = obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "attach", obj.id);
+                    if (!obj_attached)
+                    {
+                        std::cout << BOLDRED << "Attached FAILED! Continue anyway..." << RESET << std::endl;
+                    }
 
                     if (!uclv::askContinue())
                         break;
@@ -141,11 +159,21 @@ private:
                                 traj_pre_place_place_ = planner_response_->traj;
                                 success_planning_pp = true;
                                 success = true;
+
+                                // Detach obj
+                                std::cout << BOLDWHITE << "Detaching object from the end-effector..." << RESET << std::endl;
+                                auto obj_detached = obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+                                if (!obj_detached)
+                                {
+                                    std::cout << BOLDRED << "Detached FAILED! Continue anyway..." << RESET << std::endl;
+                                }
                             }
                             else
                             {
                                 std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                                 std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
+                                obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+
                                 i++;
                             }
                         }
@@ -153,6 +181,9 @@ private:
                         {
                             std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                             std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
+
+                            obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+
                             i++;
                         }
                     }
@@ -160,6 +191,8 @@ private:
                     {
                         std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                         std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
+                        obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+
                         i++;
                     }
                 }
@@ -167,6 +200,8 @@ private:
                 {
                     std::cout << BOLDRED << "FAILED! " << RESET << std::endl;
                     std::cout << BOLDWHITE << "Trying with the next attempt.." << RESET << std::endl;
+                    obj_service_call(std::make_shared<uclv_moveit_planner_interface::srv::AttachDetachSrv::Request>(), "detach", obj.id);
+
                     i++;
                 }
             }
@@ -212,6 +247,24 @@ private:
         {
             RCLCPP_ERROR(this->get_logger(), "Invoking pp_traj_service error");
             return (NULL);
+        }
+    }
+
+    bool obj_service_call(std::shared_ptr<uclv_moveit_planner_interface::srv::AttachDetachSrv_Request> planner_request, const std::string &type, const std::string &id, const std::string &link_ = "ee_fingers")
+    {
+        planner_request->type = type;
+        planner_request->link_name_to_attach = link_;
+        planner_request->obj_id = id;
+
+        auto obj_response = obj_client_->async_send_request(planner_request);
+
+        std::future_status status = obj_response.wait_for(std::chrono::seconds(10));
+        if (status == std::future_status::ready)
+            return obj_response.get()->success;
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(), "Invoking obj_service error");
+            return false;
         }
     }
 
