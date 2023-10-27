@@ -19,6 +19,7 @@ find_package(uclv_utilities REQUIRED)
 find_package(uclv_moveit_planner_interface REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 
 add_executable(pose_post_proc_server src/pose_post_proc_server.cpp)
@@ -30,20 +31,24 @@ ament_target_dependencies(pose_post_proc_server rclcpp
 add_executable(srv_post_proc_client src/srv_post_proc_client.cpp)
 ament_target_dependencies(srv_post_proc_client rclcpp uclv_grasp_interfaces std_msgs)
 
-add_executable(pp_traj_server src/pp_traj_server.cpp)
-ament_target_dependencies(pp_traj_server rclcpp geometry_msgs moveit_ros_planning_interface uclv_utilities uclv_moveit_planner_interface uclv_grasp_interfaces)
+#add_executable(pp_traj_server src/pp_traj_server.cpp)
+#ament_target_dependencies(pp_traj_server rclcpp geometry_msgs moveit_ros_planning_interface uclv_utilities uclv_moveit_planner_interface uclv_grasp_interfaces)
 
 add_executable(test_pp_client src/test_pp_client.cpp)
 ament_target_dependencies(test_pp_client rclcpp geometry_msgs moveit_ros_planning_interface uclv_utilities uclv_moveit_planner_interface uclv_grasp_interfaces)
 
 add_executable(grasp_selection_strategy_server src/grasp_selection_strategy_server.cpp)
-ament_target_dependencies(grasp_selection_strategy_server rclcpp uclv_grasp_interfaces std_msgs geometry_msgs)
+ament_target_dependencies(grasp_selection_strategy_server rclcpp uclv_grasp_interfaces std_msgs geometry_msgs uclv_utilities tf2_ros)
+
+add_executable(grasp_selection_strategy_client src/test_grasp_strategy_client.cpp)
+ament_target_dependencies(grasp_selection_strategy_client rclcpp uclv_grasp_interfaces std_msgs geometry_msgs)
 
 install(TARGETS
   pose_post_proc_server 
   srv_post_proc_client
   grasp_selection_strategy_server
-  pp_traj_server
+  grasp_selection_strategy_client
+  #pp_traj_server
   test_pp_client
   DESTINATION lib/${PROJECT_NAME})
 
