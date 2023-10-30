@@ -2,6 +2,7 @@
 #include "uclv_grasp_interfaces/srv/grasp_selection_strategy_srv.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
+#include "uclv_utilities/utilities.hpp"
 
 using namespace std::chrono_literals;
 
@@ -30,7 +31,7 @@ public:
         reference_pose.pose.position.z = 0.30;
 
 
-        sort_pre_grasp_poses(reference_pose, pre_grasp_poses);
+        sorted_pre_grasp_poses = uclv::sort_pre_grasp_poses(reference_pose, pre_grasp_poses);
 
         timer_1 = this->create_wall_timer(
             500ms, std::bind(&PosePublisher::timer_callback, this));
@@ -65,21 +66,21 @@ private:
     {
         publisher_ref_pose_->publish(this->reference_pose);
     }
-    void sort_pre_grasp_poses(geometry_msgs::msg::PoseStamped reference_pose, std::vector<geometry_msgs::msg::PoseStamped> poses)
-    {
-        std::stable_sort(poses.begin(), poses.end(),
-                  [this, &reference_pose](const geometry_msgs::msg::PoseStamped &pose1, const geometry_msgs::msg::PoseStamped &pose2)
-                  {
-                      return distance(pose1, reference_pose) < distance(pose2, reference_pose);
-                  });
-        this->sorted_pre_grasp_poses = poses;
-    }
-    double distance(geometry_msgs::msg::PoseStamped pose_1, geometry_msgs::msg::PoseStamped pose_2)
-    {
-        return sqrt(pow(pose_1.pose.position.x - pose_2.pose.position.x, 2) +
-                    pow(pose_1.pose.position.y - pose_2.pose.position.y, 2) +
-                    pow(pose_1.pose.position.z - pose_2.pose.position.z, 2));
-    }
+    // void sort_pre_grasp_poses(geometry_msgs::msg::PoseStamped reference_pose, std::vector<geometry_msgs::msg::PoseStamped> poses)
+    // {
+    //     std::stable_sort(poses.begin(), poses.end(),
+    //               [this, &reference_pose](const geometry_msgs::msg::PoseStamped &pose1, const geometry_msgs::msg::PoseStamped &pose2)
+    //               {
+    //                   return distance(pose1, reference_pose) < distance(pose2, reference_pose);
+    //               });
+    //     this->sorted_pre_grasp_poses = poses;
+    // }
+    // double distance(geometry_msgs::msg::PoseStamped pose_1, geometry_msgs::msg::PoseStamped pose_2)
+    // {
+    //     return sqrt(pow(pose_1.pose.position.x - pose_2.pose.position.x, 2) +
+    //                 pow(pose_1.pose.position.y - pose_2.pose.position.y, 2) +
+    //                 pow(pose_1.pose.position.z - pose_2.pose.position.z, 2));
+    // }
     rclcpp::TimerBase::SharedPtr timer_1;
     rclcpp::TimerBase::SharedPtr timer_2;
     rclcpp::TimerBase::SharedPtr timer_3;

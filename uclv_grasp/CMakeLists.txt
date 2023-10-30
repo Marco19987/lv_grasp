@@ -42,7 +42,7 @@ add_executable(grasp_selection_strategy_server src/grasp_selection_strategy_serv
 ament_target_dependencies(grasp_selection_strategy_server rclcpp uclv_grasp_interfaces std_msgs geometry_msgs uclv_utilities tf2_ros)
 
 add_executable(test_grasp_strategy_client src/test_grasp_strategy_client.cpp)
-ament_target_dependencies(test_grasp_strategy_client rclcpp uclv_grasp_interfaces std_msgs geometry_msgs)
+ament_target_dependencies(test_grasp_strategy_client rclcpp uclv_grasp_interfaces std_msgs geometry_msgs uclv_utilities tf2_ros)
 
 install(TARGETS
   pose_post_proc_server 
