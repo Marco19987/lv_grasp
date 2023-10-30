@@ -59,8 +59,8 @@ private:
         double offset = 0.12;        // offset pre-grasp [cm]
         double theta = 0.0;          // inclination wrt the object
         double alpha = 0.0;          // rotation around the object
-        int rotation_attempt = 6;    // number of rotation attempts
-        int inclination_attempt = 4; // number of inclination attempts
+        int rotation_attempt = 12;    // number of rotation attempts - 6
+        int inclination_attempt = 12; // number of inclination attempts - 4
 
         std::vector<geometry_msgs::msg::PoseStamped> pre_grasp_poses;
 
@@ -83,8 +83,8 @@ private:
 
         for (int i = 0; i < inclination_attempt; i++)
         {
-            theta = (i * M_PI / (3 * inclination_attempt));
-            // theta = (i * 2 * M_PI / (inclination_attempt)); for the complete sphere
+            //theta = (i * M_PI / (3 * inclination_attempt));
+            theta = (i * M_PI / (inclination_attempt)); //for the complete sphere
 
             /* Rotation around y axis */
             rotation_theta << cos(theta), 0, sin(theta),
@@ -93,12 +93,12 @@ private:
 
             for (int k = 0; k < rotation_attempt; k++)
             {
-                if (k < rotation_attempt / 2)
-                    alpha = -(k * M_PI / rotation_attempt);
-                else
-                    alpha = (k - floor(rotation_attempt / 2)) * M_PI / rotation_attempt + M_PI / rotation_attempt;
+                // if (k < rotation_attempt / 2)
+                //     alpha = -(k * M_PI / rotation_attempt);
+                // else
+                //     alpha = (k - floor(rotation_attempt / 2)) * M_PI / rotation_attempt + M_PI / rotation_attempt;
 
-                //  alpha = -(k * 2 * M_PI / rotation_attempt); for the complete sphere
+                alpha = (k * 2 * M_PI / rotation_attempt); //for the complete sphere
 
 
                 pre_grasp_pose.pose.position.x = offset * sin(theta) * sin(alpha);
