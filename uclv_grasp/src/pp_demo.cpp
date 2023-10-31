@@ -104,10 +104,10 @@ uclv_grasp_interfaces::srv::PosePostProcService::Response::SharedPtr invoke_pose
     return result_depth_optimization;
 }
 uclv_grasp_interfaces::srv::GraspSelectionStrategySrv::Response::SharedPtr invoke_grasp_selection_strategy_server(
-                std::shared_ptr<rclcpp::Node> node, std::string object_type, 
-                geometry_msgs::msg::PoseStamped object_pose)
+    std::shared_ptr<rclcpp::Node> node, std::string object_type,
+    geometry_msgs::msg::PoseStamped object_pose)
 {
-        rclcpp::Client<uclv_grasp_interfaces::srv::GraspSelectionStrategySrv>::SharedPtr client =
+    rclcpp::Client<uclv_grasp_interfaces::srv::GraspSelectionStrategySrv>::SharedPtr client =
         node->create_client<uclv_grasp_interfaces::srv::GraspSelectionStrategySrv>("grasp_selection_strategy_service");
 
     auto request = std::make_shared<uclv_grasp_interfaces::srv::GraspSelectionStrategySrv::Request>();
@@ -146,51 +146,63 @@ public:
     PosePublisher()
         : Node("pose_publisher")
     {
+        publisher_poses.resize(max_publishers);
+        publisher_pose_arrays.resize(max_publishers);
+        poses.resize(max_publishers);
+        pose_arrays.resize(max_publishers);
+
+        // timer_ptr_ = this->create_wall_timer(1s, std::bind(&DemoNode::timer_callback, this),
+        //                                     timer_cb_group_);
     }
     int publish_pose(std::string topicname, double queue_size, geometry_msgs::msg::PoseStamped pose)
     {
-        pose_publishers++;
         publisher_poses[pose_publishers] = this->create_publisher<geometry_msgs::msg::PoseStamped>(topicname, queue_size);
         this->poses[pose_publishers] = pose;
-        timer_poses[pose_publishers] = this->create_wall_timer(
-            1s, [this]()
-            { pose_callback(this->pose_publishers); });
-
+        if (pose_publishers == 0)
+            timer_pose = this->create_wall_timer(1s, std::bind(&PosePublisher::pose_callback, this));
+        pose_publishers++;
         return pose_publishers;
     }
     int publish_pose_array(std::string topicname, double queue_size, geometry_msgs::msg::PoseArray pose_array)
     {
-        pose_arrays_publishers++;
         publisher_pose_arrays[pose_arrays_publishers] = this->create_publisher<geometry_msgs::msg::PoseArray>(topicname, queue_size);
         this->pose_arrays[pose_arrays_publishers] = pose_array;
-        timer_pose_arrays[pose_arrays_publishers] = this->create_wall_timer(
-            1s, [this]()
-            { pose_array_callback(this->pose_arrays_publishers); });
+        if (pose_arrays_publishers == 0)
+            timer_pose_array = this->create_wall_timer(1s, std::bind(&PosePublisher::pose_array_callback, this));
+        pose_arrays_publishers++;
 
         return pose_arrays_publishers;
     }
 
 private:
-    void pose_callback(int index)
+    void pose_callback()
     {
-        RCLCPP_INFO(this->get_logger(), "Publishing the refined pose");
-        publisher_poses[index]->publish(this->poses[index]);
+        RCLCPP_INFO(this->get_logger(), "Publishing the poses");
+        for (int i = 0; i < pose_publishers; i++)
+        {
+            publisher_poses[i]->publish(this->poses[i]);
+        }
     }
-    void pose_array_callback(int index)
+    void pose_array_callback()
     {
-        RCLCPP_INFO(this->get_logger(), "Publishing array pose");
-        publisher_pose_arrays[index]->publish(this->pose_arrays[index]);
+        RCLCPP_INFO(this->get_logger(), "Publishing the pose arrays");
+        for (int i = 0; i < pose_arrays_publishers; i++)
+        {
+            publisher_pose_arrays[i]->publish(this->pose_arrays[i]);
+        }
     }
 
-    std::vector<rclcpp::TimerBase::SharedPtr> timer_poses;
+    rclcpp::TimerBase::SharedPtr timer_pose;
     std::vector<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr> publisher_poses;
     std::vector<geometry_msgs::msg::PoseStamped> poses;
-    int pose_publishers = -1;
+    int pose_publishers = 0;
 
-    std::vector<rclcpp::TimerBase::SharedPtr> timer_pose_arrays;
+    rclcpp::TimerBase::SharedPtr timer_pose_array;
     std::vector<rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr> publisher_pose_arrays;
     std::vector<geometry_msgs::msg::PoseArray> pose_arrays;
-    int pose_arrays_publishers = -1;
+    int pose_arrays_publishers = 0;
+
+    int max_publishers = 10;
 };
 
 int main(int argc, char **argv)
@@ -207,17 +219,19 @@ int main(int argc, char **argv)
     // ################################### USER INPUT ###############################################
 
     // ------------- depth_optimizer_server params -------------
-    std::string mesh_path = "/home/sfederico/Documents/cad_models/Apple/Apple_4K/food_apple_01_4k.obj";
-    double mesh_scale = 1.0;
+    std::string mesh_path = "/home/sfederico/Documents/cad_models/santal_ace/santal_centered.obj";
+    // /home/sfederico/Documents/cad_models/santal_ace/santal_centered.obj  scale 0.001
+    // /home/sfederico/Documents/cad_models/Apple/Apple_4K/food_apple_01_4k.obj scale 1
+    double mesh_scale = 0.001;
 
     // ------------- pose_post_proc_service params -------------
     std_msgs::msg::String object_name;
     std_msgs::msg::String frame_to_transform;
     object_name.data = "santal_ace";
-    frame_to_transform.data = "camera_link";
-    bool optimize_pose = false;
+    frame_to_transform.data = "base_link";
+    bool optimize_pose = true;
     bool compute_mean = true;
-    
+
     // ------------- grasp_selection_strategy_service params -------------
     std::string object_type = "apple";
     std::string base_frame = "base_link";
@@ -228,15 +242,16 @@ int main(int argc, char **argv)
 
     auto result_depth_optimization = invoke_pose_post_proc_server(node, object_name, optimize_pose, compute_mean, frame_to_transform);
 
-    pose_publisher->publish_pose("refined_pose", 10, result_depth_optimization->refined_pose);
+    pose_publisher->publish_pose("refined_pose1", 10, result_depth_optimization->refined_pose);
     pose_publisher->publish_pose("estimated_pose", 10, result_depth_optimization->estimated_pose);
+    pose_publisher->publish_pose("refined_pose2", 10, result_depth_optimization->refined_pose);
 
     // ################################## RETRIEVE PRE-GRASP POSES ######################################
     auto pre_grasp_poses_ = invoke_grasp_selection_strategy_server(node, object_type, result_depth_optimization->refined_pose);
 
-    // sort the pre-grasp poses according to the distance from the end effector pose 
-    geometry_msgs::msg::TransformStamped end_effector_pose_transform;  
-    uclv::getTransform(node, base_frame, ee_frame ,end_effector_pose_transform);
+    // sort the pre-grasp poses according to the distance from the end effector pose
+    geometry_msgs::msg::TransformStamped end_effector_pose_transform;
+    uclv::getTransform(node, base_frame, ee_frame, end_effector_pose_transform);
     auto sorted_pre_grasp_poses = uclv::sort_pre_grasp_poses(uclv::transform_2_geometry(end_effector_pose_transform), pre_grasp_poses_->pre_grasp_poses);
 
     pose_publisher->publish_pose_array("pre_grasp_poses", 10, uclv::pose_stamped_2_pose_array(sorted_pre_grasp_poses));
