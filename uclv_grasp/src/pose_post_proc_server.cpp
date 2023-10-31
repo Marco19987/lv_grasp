@@ -333,29 +333,30 @@ private:
 
       std::future_status status = result_depth_optimization_feature.wait_for(std::chrono::seconds(5));
       if (status == std::future_status::ready)
+      {
         handle_depth_optimization_response(result_depth_optimization_feature.share());
+        // Convert the pose to the required frame if required
+        if (request->frame_to_transform.data != "")
+        {
+          RCLCPP_INFO(this->get_logger(), "Transforming the pose in the required frame...\n");
+          estimated_pose = transform_pose(estimated_pose, request->frame_to_transform.data);
+          result_depth_optimization_->refined_pose = transform_pose(result_depth_optimization_->refined_pose, request->frame_to_transform.data);
+        }
+        if (success_srv_)
+        {
+          RCLCPP_INFO(this->get_logger(), "The pose has been correctly post processed");
+          response->estimated_pose = estimated_pose;
+          response->refined_pose = result_depth_optimization_->refined_pose;
+          response->scale_obj = result_depth_optimization_->scale_obj;
+        }
+        else
+        {
+          RCLCPP_ERROR(this->get_logger(), "ERROR: The pose has not been correctly post processed");
+          response->estimated_pose = estimated_pose;
+        }
+      }
       else
         RCLCPP_ERROR(this->get_logger(), "Invoking depth optimization service error");
-
-      // Convert the pose to the required frame if required
-      if (request->frame_to_transform.data != "")
-      {
-        RCLCPP_INFO(this->get_logger(), "Transforming the pose in the required frame...\n");
-        estimated_pose = transform_pose(estimated_pose, request->frame_to_transform.data);
-        result_depth_optimization_->refined_pose = transform_pose(result_depth_optimization_->refined_pose, request->frame_to_transform.data);
-      }
-      if (success_srv_)
-      {
-        RCLCPP_INFO(this->get_logger(), "The pose has been correctly post processed");
-        response->estimated_pose = estimated_pose;
-        response->refined_pose = result_depth_optimization_->refined_pose;
-        response->scale_obj = result_depth_optimization_->scale_obj;
-      }
-      else
-      {
-        RCLCPP_ERROR(this->get_logger(), "ERROR: The pose has not been correctly post processed");
-        response->estimated_pose = estimated_pose;
-      }
     }
     else
     {

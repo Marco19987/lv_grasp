@@ -44,6 +44,10 @@ ament_target_dependencies(grasp_selection_strategy_server rclcpp uclv_grasp_inte
 add_executable(test_grasp_strategy_client src/test_grasp_strategy_client.cpp)
 ament_target_dependencies(test_grasp_strategy_client rclcpp uclv_grasp_interfaces std_msgs geometry_msgs uclv_utilities tf2_ros)
 
+add_executable(pp_demo_node src/pp_demo.cpp)
+ament_target_dependencies(pp_demo_node rclcpp uclv_grasp_interfaces std_msgs geometry_msgs uclv_utilities 
+                          tf2_ros moveit_ros_planning_interface uclv_moveit_planner_interface)
+
 install(TARGETS
   pose_post_proc_server 
   srv_post_proc_client
@@ -51,6 +55,7 @@ install(TARGETS
   test_grasp_strategy_client
   pp_traj_server
   test_pp_client
+  pp_demo_node
   DESTINATION lib/${PROJECT_NAME})
 
 
