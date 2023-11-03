@@ -9,8 +9,16 @@
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "uclv_utilities/utilities.hpp"
 
+#include "uclv_moveit_planner_interface/action/traj_action.hpp"
+#include "uclv_grasp_interfaces/srv/pick_and_place_traj_srv.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+
 #include <thread>
 using namespace std::chrono_literals;
+using TrajAction_ = uclv_moveit_planner_interface::action::TrajAction;
+using GoalHandleTrajAction = rclcpp_action::ClientGoalHandle<TrajAction_>;
+
+bool read_pose = false;
 
 void set_depth_optimizer_params(std::shared_ptr<rclcpp::Node> node, std::string mesh_path, double mesh_scale)
 {
@@ -54,6 +62,7 @@ void set_depth_optimizer_params(std::shared_ptr<rclcpp::Node> node, std::string 
         RCLCPP_ERROR(node->get_logger(), "Failed to set parameters");
     }
 }
+
 uclv_grasp_interfaces::srv::PosePostProcService::Response::SharedPtr invoke_pose_post_proc_server(std::shared_ptr<rclcpp::Node> node, std_msgs::msg::String object_name, bool optimize_pose, bool compute_mean, std_msgs::msg::String frame_to_transform)
 {
     rclcpp::Client<uclv_grasp_interfaces::srv::PosePostProcService>::SharedPtr client =
@@ -103,6 +112,7 @@ uclv_grasp_interfaces::srv::PosePostProcService::Response::SharedPtr invoke_pose
 
     return result_depth_optimization;
 }
+
 uclv_grasp_interfaces::srv::GraspSelectionStrategySrv::Response::SharedPtr invoke_grasp_selection_strategy_server(
     std::shared_ptr<rclcpp::Node> node, std::string object_type,
     geometry_msgs::msg::PoseStamped object_pose)
@@ -139,6 +149,60 @@ uclv_grasp_interfaces::srv::GraspSelectionStrategySrv::Response::SharedPtr invok
     // Get the pose and publish it
     return result_.get();
 }
+
+std::shared_ptr<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv_Response> invoke_planning_pp(std::shared_ptr<rclcpp::Node> node, const geometry_msgs::msg::PoseStamped &obj_pose, const std::vector<geometry_msgs::msg::PoseStamped> &pre_grasp_poses, const geometry_msgs::msg::PoseStamped &pre_place_pose, const geometry_msgs::msg::PoseStamped &place_pose, const std::string target_frame)
+{
+    RCLCPP_INFO_STREAM(node->get_logger(), geometry_msgs::msg::to_yaml(obj_pose));
+
+    geometry_msgs::msg::TransformStamped transform;
+    geometry_msgs::msg::PoseStamped pick_pose = obj_pose;
+    rclcpp::Client<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv>::SharedPtr planner_client_;
+    std::shared_ptr<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv_Request> planner_request;
+
+    std::cout << BOLDWHITE << "Creating planning request..." << RESET << std::endl;
+    planner_client_ = node->create_client<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv>("pp_traj_service", rmw_qos_profile_services_default);
+
+    planner_request = std::make_shared<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv_Request>();
+    planner_request->target_frame = target_frame;
+    planner_request->pre_grasp_poses = pre_grasp_poses;
+    planner_request->pick_pose = obj_pose;
+    planner_request->pre_place_pose = pre_place_pose;
+    planner_request->place_pose = place_pose;
+
+    std::cout << BOLDWHITE << "Calling planner service..." << RESET << std::endl;
+    auto planner_response = planner_client_->async_send_request(planner_request);
+
+    // Wait for the service response
+    if (rclcpp::spin_until_future_complete(node, planner_response) !=
+        rclcpp::FutureReturnCode::SUCCESS)
+    {
+        RCLCPP_ERROR(node->get_logger(), "Failed to call planner service");
+    }
+
+    auto planner_response_ = planner_response.get();
+
+    // Get the trajectory from the response
+    bool success_ = planner_response_->success;
+
+    if (success_)
+    {
+        std::cout << BOLDGREEN << "Planning successfully created " << RESET << std::endl;
+    }
+    else
+    {
+        std::cout << BOLDRED << "Planning failed!" << RESET << std::endl;
+        rclcpp::shutdown();
+    }
+
+    return planner_response_;
+}
+
+//     traj_vec.clear();
+// traj_vec.push_back(planner_response_->traj_home_pre_grasp);
+// traj_vec.push_back(planner_response_->traj_pre_grasp_pick);
+// traj_vec.push_back(planner_response_->traj_pick_post_grasp);
+// traj_vec.push_back(planner_response_->traj_post_grasp_pre_place);
+// traj_vec.push_back(planner_response_->traj_pre_place_place);
 
 class PosePublisher : public rclcpp::Node
 {
@@ -220,6 +284,7 @@ int main(int argc, char **argv)
 
     // ------------- depth_optimizer_server params -------------
     std::string mesh_path = "/home/sfederico/Documents/cad_models/santal_ace/santal_centered.obj";
+    
     // /home/sfederico/Documents/cad_models/santal_ace/santal_centered.obj  scale 0.001
     // /home/sfederico/Documents/cad_models/Apple/Apple_4K/food_apple_01_4k.obj scale 1
     double mesh_scale = 0.001;
@@ -235,7 +300,24 @@ int main(int argc, char **argv)
     // ------------- grasp_selection_strategy_service params -------------
     std::string object_type = "apple";
     std::string base_frame = "base_link";
-    std::string ee_frame = "ee_link";
+    std::string ee_frame = "ee_fingers";
+
+    // ------------- planning_pp params -------------
+    geometry_msgs::msg::PoseStamped pre_place_pose;
+    geometry_msgs::msg::PoseStamped place_pose;
+    std::string target_frame = "ee_fingers";
+
+    geometry_msgs::msg::TransformStamped transform;
+    uclv::getTransform(node, "base_link", "ee_fingers",transform);
+
+    place_pose.pose.position.x = 0.3;
+    place_pose.pose.position.y = -0.3;
+    place_pose.pose.position.z = 0.01;
+    place_pose.pose.orientation = transform.transform.rotation;
+    place_pose.header.frame_id = "base_link";
+
+    pre_place_pose.pose = place_pose.pose;
+    pre_place_pose.pose.position.z = pre_place_pose.pose.position.z + 0.1;
 
     // ################################## RETRIEVE OBJECT POSE ######################################
     set_depth_optimizer_params(node, mesh_path, mesh_scale);
@@ -244,7 +326,6 @@ int main(int argc, char **argv)
 
     pose_publisher->publish_pose("refined_pose1", 10, result_depth_optimization->refined_pose);
     pose_publisher->publish_pose("estimated_pose", 10, result_depth_optimization->estimated_pose);
-    pose_publisher->publish_pose("refined_pose2", 10, result_depth_optimization->refined_pose);
 
     // ################################## RETRIEVE PRE-GRASP POSES ######################################
     auto pre_grasp_poses_ = invoke_grasp_selection_strategy_server(node, object_type, result_depth_optimization->refined_pose);
@@ -253,8 +334,15 @@ int main(int argc, char **argv)
     geometry_msgs::msg::TransformStamped end_effector_pose_transform;
     uclv::getTransform(node, base_frame, ee_frame, end_effector_pose_transform);
     auto sorted_pre_grasp_poses = uclv::sort_pre_grasp_poses(uclv::transform_2_geometry(end_effector_pose_transform), pre_grasp_poses_->pre_grasp_poses);
-
     pose_publisher->publish_pose_array("pre_grasp_poses", 10, uclv::pose_stamped_2_pose_array(sorted_pre_grasp_poses));
+
+    // ################################## RETRIEVE PLANNED TRAJECTORIES ######################################
+
+    auto planner_response = invoke_planning_pp(node, result_depth_optimization->refined_pose, sorted_pre_grasp_poses, pre_place_pose, place_pose, target_frame);
+
+    while (rclcpp::ok())
+    {
+    }
 
     rclcpp::shutdown();
     return 0;
