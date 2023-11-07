@@ -85,7 +85,7 @@ private:
         std::cout << BOLDWHITE << "Created object with ID: " << RESET << obj.id << std::endl;
         while (!success_planning_pp && i < num_attempts)
         {
-            std::cout << BOLDWHITE << "Attempt " << i + 1 << " of " << num_attempts << RESET << std::endl;
+            std::cout << BOLDWHITE << "\n\nAttempt " << i + 1 << " of " << num_attempts << RESET << std::endl;
             // Planning from the actual pose of the robot to the i-esim pre-grasp pose of the object in the joint space
             std::cout << BOLDWHITE << "Planning: " << RESET << std::endl;
             std::cout << BOLDMAGENTA << "   1. CURRENT_POSE -> PRE_GRASP: " << RESET << std::flush;

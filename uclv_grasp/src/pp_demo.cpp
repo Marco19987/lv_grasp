@@ -197,12 +197,102 @@ std::shared_ptr<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv_Response> invoke
     return planner_response_;
 }
 
-//     traj_vec.clear();
-// traj_vec.push_back(planner_response_->traj_home_pre_grasp);
-// traj_vec.push_back(planner_response_->traj_pre_grasp_pick);
-// traj_vec.push_back(planner_response_->traj_pick_post_grasp);
-// traj_vec.push_back(planner_response_->traj_post_grasp_pre_place);
-// traj_vec.push_back(planner_response_->traj_pre_place_place);
+void goal_response_callback(std::shared_ptr<rclcpp::Node> node, const GoalHandleTrajAction::SharedPtr &goal_handle)
+{
+    if (!goal_handle)
+    {
+        RCLCPP_ERROR(node->get_logger(), "Goal was rejected by server");
+    }
+    else
+    {
+        RCLCPP_INFO(node->get_logger(), "Goal accepted by server, waiting for result");
+    }
+}
+
+void result_callback(std::shared_ptr<rclcpp::Node> node, const GoalHandleTrajAction::WrappedResult &result)
+{
+    switch (result.code)
+    {
+    case rclcpp_action::ResultCode::SUCCEEDED:
+        break;
+    case rclcpp_action::ResultCode::ABORTED:
+        RCLCPP_ERROR(node->get_logger(), "Goal was aborted");
+        return;
+    case rclcpp_action::ResultCode::CANCELED:
+        RCLCPP_ERROR(node->get_logger(), "Goal was canceled");
+        return;
+    default:
+        RCLCPP_ERROR(node->get_logger(), "Unknown result code");
+        return;
+    }
+
+    if (result.result->success)
+        std::cout << BOLDGREEN << "Trajectory execution success!" << RESET << std::endl;
+    else
+        std::cout << BOLDRED << "Trajectory execution failed!" << RESET << std::endl;
+}
+
+void feedback_callback(std::shared_ptr<rclcpp::Node> node,
+                       GoalHandleTrajAction::SharedPtr,
+                       const std::shared_ptr<const TrajAction_::Feedback> feedback)
+{
+    std::cout << BOLDCYAN << "Feedback received: " << feedback->progress << RESET << std::endl;
+    if (feedback->progress == 1)
+        std::cout << BOLDWHITE << "Close the gripper" << RESET << std::endl;
+}
+
+void send_goal(std::shared_ptr<rclcpp::Node> node, const std::shared_ptr<uclv_grasp_interfaces::srv::PickAndPlaceTrajSrv_Response> planner_response_, const bool &simulation, const std::string &topic_robot, const double &scale_factor, const double &rate)
+{
+    using namespace std::placeholders;
+    if (planner_response_->success)
+    {
+        rclcpp_action::Client<TrajAction_>::SharedPtr traj_action_client_;
+        traj_action_client_ = rclcpp_action::create_client<TrajAction_>(node, "trajectory_execution_as");
+        std::vector<moveit_msgs::msg::RobotTrajectory> traj_vec;
+        traj_vec.clear();
+        traj_vec.push_back(planner_response_->traj_home_pre_grasp);
+        traj_vec.push_back(planner_response_->traj_pre_grasp_pick);
+        traj_vec.push_back(planner_response_->traj_pick_post_grasp);
+        traj_vec.push_back(planner_response_->traj_post_grasp_pre_place);
+        traj_vec.push_back(planner_response_->traj_pre_place_place);
+
+        std::cout << BOLDWHITE << "Waiting for action server to start." << RESET << std::endl;
+
+        if (!traj_action_client_->wait_for_action_server())
+        {
+            RCLCPP_ERROR(node->get_logger(), "Action server not available after waiting");
+            rclcpp::shutdown();
+        }
+
+        auto goal_msg = TrajAction_::Goal();
+        goal_msg.simulation = simulation;
+        goal_msg.traj = traj_vec;
+        goal_msg.topic_robot = topic_robot;
+        goal_msg.scale_factor = scale_factor;
+        goal_msg.rate = rate;
+        std::cout << BOLDWHITE << "Sending goal to the action server" << RESET << std::endl;
+
+        auto send_goal_options = rclcpp_action::Client<TrajAction_>::SendGoalOptions();
+        send_goal_options.goal_response_callback =
+            std::bind(&goal_response_callback, node, _1);
+        send_goal_options.feedback_callback =
+            std::bind(&feedback_callback, node, _1, _2);
+        send_goal_options.result_callback =
+            std::bind(&result_callback, node, _1);
+        auto goal_handle_future = traj_action_client_->async_send_goal(goal_msg, send_goal_options);
+
+        // Spin until goal is reached
+        rclcpp::spin_until_future_complete(node, goal_handle_future);
+        auto goal_handle = goal_handle_future.get();
+        auto result_future = traj_action_client_->async_get_result(goal_handle);
+        rclcpp::spin_until_future_complete(node, result_future);
+    }
+    else
+    {
+        std::cout << BOLDRED << "Planning failed!" << RESET << std::endl;
+        return;
+    }
+}
 
 class PosePublisher : public rclcpp::Node
 {
@@ -241,7 +331,7 @@ public:
 private:
     void pose_callback()
     {
-        RCLCPP_INFO(this->get_logger(), "Publishing the poses");
+        // RCLCPP_INFO(this->get_logger(), "Publishing the poses");
         for (int i = 0; i < pose_publishers; i++)
         {
             publisher_poses[i]->publish(this->poses[i]);
@@ -249,7 +339,7 @@ private:
     }
     void pose_array_callback()
     {
-        RCLCPP_INFO(this->get_logger(), "Publishing the pose arrays");
+        // RCLCPP_INFO(this->get_logger(), "Publishing the pose arrays");
         for (int i = 0; i < pose_arrays_publishers; i++)
         {
             publisher_pose_arrays[i]->publish(this->pose_arrays[i]);
@@ -284,7 +374,7 @@ int main(int argc, char **argv)
 
     // ------------- depth_optimizer_server params -------------
     std::string mesh_path = "/home/sfederico/Documents/cad_models/santal_ace/santal_centered.obj";
-    
+
     // /home/sfederico/Documents/cad_models/santal_ace/santal_centered.obj  scale 0.001
     // /home/sfederico/Documents/cad_models/Apple/Apple_4K/food_apple_01_4k.obj scale 1
     double mesh_scale = 0.001;
@@ -308,16 +398,22 @@ int main(int argc, char **argv)
     std::string target_frame = "ee_fingers";
 
     geometry_msgs::msg::TransformStamped transform;
-    uclv::getTransform(node, "base_link", "ee_fingers",transform);
+    uclv::getTransform(node, "base_link", "ee_fingers", transform);
 
     place_pose.pose.position.x = 0.3;
     place_pose.pose.position.y = -0.3;
-    place_pose.pose.position.z = 0.01;
+    place_pose.pose.position.z = 0.05;
     place_pose.pose.orientation = transform.transform.rotation;
     place_pose.header.frame_id = "base_link";
 
     pre_place_pose.pose = place_pose.pose;
     pre_place_pose.pose.position.z = pre_place_pose.pose.position.z + 0.1;
+
+    // --------------- trajectory_execution_as params ---------------
+    bool simulation = true;
+    std::string topic_robot = "/motoman/joint_ll_control";
+    double scale_factor = 5.0;
+    double rate = 50.0;
 
     // ################################## RETRIEVE OBJECT POSE ######################################
     set_depth_optimizer_params(node, mesh_path, mesh_scale);
@@ -339,6 +435,9 @@ int main(int argc, char **argv)
     // ################################## RETRIEVE PLANNED TRAJECTORIES ######################################
 
     auto planner_response = invoke_planning_pp(node, result_depth_optimization->refined_pose, sorted_pre_grasp_poses, pre_place_pose, place_pose, target_frame);
+
+    // ################################## EXECUTE TRAJECTORIES ######################################
+    send_goal(node, planner_response, simulation, topic_robot, scale_factor, rate);
 
     while (rclcpp::ok())
     {
